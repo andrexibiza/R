@@ -26,8 +26,13 @@ head(test)
 
 # Evaluate structure and data types
 # str(train)
+str(train)
+str(test)
+
 describe(train)
+# train has missing values: Age 177, Cabin 687, Embarked 2
 describe(test)
+# test has missing values: Cabin 327, Fare 1, Age 86
 
 # DATA CLEANING AND PREPROCESSING
 
@@ -35,23 +40,27 @@ describe(test)
 # [X] Encode Sex as numeric factor
 train$Sex <- ifelse(train$Sex == "male", 1, 0)
 test$Sex <- ifelse(test$Sex == "male", 1, 0)
-# head(train) #--encoded successfully
-# head(test)
+# head(train[, "Sex"]) #--encoded successfully
+# head(test[, "Sex"]) #--encoded successfully
 
 # [X] Convert Pclass to an ordinal factor
 train$Pclass <- factor(train$Pclass, levels = c(1, 2, 3), ordered = TRUE)
 test$Pclass <- factor(test$Pclass, levels = c(1, 2, 3), ordered = TRUE)
-# head(train) #--encoded successfully
+# head(train[, "Pclass"]) #--encoded successfully
+# head(test[, "Pclass"]) #--encoded successfully
 
 # [X] One-hot encode Embarked
-embarked_one_hot <- model.matrix(~ Embarked - 1, data = train)
+embarked_train_one_hot <- model.matrix(~ Embarked - 1, data = train)
+embarked_test_one_hot <- model.matrix(~ Embarked - 1, data = test)
 
 # Add the one-hot encoded columns back to the dataset
-train <- cbind(train, embarked_one_hot)
-test <- cbind(test, embarked_one_hot)
+train <- cbind(train, embarked_train_one_hot)
+test <- cbind(test, embarked_test_one_hot)
 
 # Verify encoding:
-# head(train[, c("Embarked", "EmbarkedC", "EmbarkedQ", "EmbarkedS")])
+head(train[, c("Embarked", "EmbarkedC", "EmbarkedQ", "EmbarkedS")])
+head(test[, c("Embarked", "EmbarkedC", "EmbarkedQ", "EmbarkedS")])
+
 # -- looks perfect, let's not forget about imputing our 2 missing values
 # Impute 2 missing Embarked values with the mode
 train$Embarked[train$Embarked == ""] <- NA
@@ -60,11 +69,12 @@ train$Embarked[is.na(train$Embarked)] <- embarked_mode
 
 # verify imputation
 describe(train$Embarked)
+
 # now drop the original Embarked column
 train <- train %>% select(-Embarked)
 test <- test %>% select(-Embarked)
-head(train)
-head(test)
+str(train)
+str(test)
 
 # 2) Apply log transformation to Fare
 #--plot shape before transformation?
@@ -89,43 +99,48 @@ ggplot(train, aes(x = Fare)) +
 # 3) Address missing values
 # Age - Train
 #--Predict missing ages using other features
-age_data <- train %>% 
+train_age_data <- train %>% 
     select(Age, Pclass, Sex, SibSp, Parch, Fare, EmbarkedC, EmbarkedQ, EmbarkedS)
 
-age_complete <- age_data %>% filter(!is.na(Age))
-age_missing <- age_data %>% filter(is.na(Age))
+# head(train[, c("Age", "Pclass", "Sex", "SibSp", "Parch", "Fare", "EmbarkedC", "EmbarkedQ", "EmbarkedS")])
+#--verified that all these columns are formatted properly
+
+train_age_complete <- train_age_data %>% filter(!is.na(Age))
+train_age_missing <- train_age_data %>% filter(is.na(Age))
 
 set.seed(666)
 cv_control <- trainControl(method = "cv", number = 5)
-age_cv_model <- train(
+train_age_cv_model <- train(
   Age ~ Pclass + Sex + SibSp + Parch + Fare + EmbarkedC + EmbarkedQ + EmbarkedS,
-  data = age_complete,
+  data = train_age_complete,
   method = "rf",
   trControl = cv_control,
   tuneLength = 3
 )
-print(age_cv_model)
+print(train_age_cv_model)
 
 # Use the best model to predict missing ages
-predicted_ages <- predict(age_cv_model, newdata = age_missing)
+predicted_train_ages <- predict(train_age_cv_model, newdata = train_age_missing)
 
 # Impute the predicted ages back into the train dataset
-train$Age[is.na(train$Age)] <- predicted_ages
+train$Age[is.na(train$Age)] <- predicted_train_ages
 describe(train$Age)
 
-any_na(test$Age)
-# Preprocess the test dataset for Age imputation
-age_test_data <- test %>% 
+
+# Preprocess the test data for Age imputation
+test_age_data <- test %>% 
   select(Age, Pclass, Sex, SibSp, Parch, Fare, EmbarkedC, EmbarkedQ, EmbarkedS)
 
-age_test_missing <- age_test_data %>% filter(is.na(Age))
+test_age_missing <- test_age_data %>% filter(is.na(Age))
+test_age_complete <- test_age_data %>% filter(!is.na(Age))
 
-# Use the trained age_cv_model to predict missing ages in the test dataset
-predicted_test_ages <- predict(age_cv_model, newdata = age_test_missing)
+# Use the trained train_age_cv_model to predict missing ages in the test dataset
+predicted_test_ages <- predict(train_age_cv_model, newdata = test_age_missing)
 
 # Impute the predicted ages back into the test dataset
 test$Age[is.na(test$Age)] <- predicted_test_ages
 
+n_miss(test$Age)
 
 # Create HasCabin feature
 # any_na(train$Cabin) # returns FALSE
@@ -143,7 +158,7 @@ n_miss(train$Cabin) # 687 : issue solved
 # Now this will work correctly:
 train$HasCabin <- ifelse(!is.na(train$Cabin), 1, 0)
 test$HasCabin <- ifelse(!is.na(test$Cabin), 1, 0)
-describe(train$HasCabin) # - perfect
+#describe(train$HasCabin) # - perfect
 head(train[, c("Cabin", "HasCabin")])  #looks good
 head(test[, c("Cabin", "HasCabin")]) 
 
@@ -155,9 +170,10 @@ test$FamilySize <- test$SibSp + test$Parch + 1
 summary(train$FamilySize)
 table(train$FamilySize)
 
+#--debugged up to this point so far-------
+
 # 5) Remove unnecessary features
 train <- train %>% 
-  select(-Cabin) %>% 
   select(-Name) %>% 
   select(-PassengerId) %>% 
   select(-Ticket)
