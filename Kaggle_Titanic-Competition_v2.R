@@ -16,22 +16,21 @@ library(ggplot2)      # viz
 library(Hmisc)        # robust describe() function
 library(naniar)       # working with missing data
 library(randomForest) # inference model
-library(tidyr)        # data cleaning
 
-# Load `train.csv` data
+# Load train and test data
 train <- read.csv("train.csv", stringsAsFactors = FALSE)
 test <- read.csv("test.csv", stringsAsFactors = FALSE)
 head(train) #--loaded successfully
-head(test)
+head(test)  #--loaded successfully
 
 # Evaluate structure and data types
 # str(train)
-str(train)
-str(test)
-
-describe(train)
+# str(train)
+# str(test)
+# 
+# describe(train)
 # train has missing values: Age 177, Cabin 687, Embarked 2
-describe(test)
+# describe(test)
 # test has missing values: Cabin 327, Fare 1, Age 86
 
 # DATA CLEANING AND PREPROCESSING
@@ -89,12 +88,10 @@ test$Fare <- log(test$Fare + 1)
 head(train[, "Fare"])
 head(test[, "Fare"])
 
-# -- is the result normally distributed?
 ggplot(train, aes(x = Fare)) +
   geom_histogram() +
   theme_minimal() +
   ggtitle("Log Transformed Fare")
-# -- the answer is a hard no. the data are still very right-skewed with outliers.
 
 # 3) Address missing values
 # Age - Train
@@ -126,7 +123,7 @@ predicted_train_ages <- predict(train_age_cv_model, newdata = train_age_missing)
 train$Age[is.na(train$Age)] <- predicted_train_ages
 describe(train$Age)
 
-
+#--Age in test data
 # Preprocess the test data for Age imputation
 test_age_data <- test %>% 
   select(Age, Pclass, Sex, SibSp, Parch, Fare, EmbarkedC, EmbarkedQ, EmbarkedS)
@@ -150,49 +147,54 @@ n_miss(test$Age)
 train$Cabin[train$Cabin == ""] <- NA
 test$Cabin[test$Cabin == ""] <- NA
 
-# Verify the NA values
-any_na(train$Cabin)  # Should now return TRUE
-describe(train$Cabin)  # Should remain consistent
-n_miss(train$Cabin) # 687 : issue solved
+n_miss(train$Cabin)
+n_miss(test$Cabin)
 
-# Now this will work correctly:
+# Encode the HasCabin variable:
 train$HasCabin <- ifelse(!is.na(train$Cabin), 1, 0)
 test$HasCabin <- ifelse(!is.na(test$Cabin), 1, 0)
-#describe(train$HasCabin) # - perfect
+
+# describe(train$HasCabin) # - perfect
 head(train[, c("Cabin", "HasCabin")])  #looks good
 head(test[, c("Cabin", "HasCabin")]) 
+
+n_miss(train$HasCabin)
+n_miss(test$HasCabin)
 
 # Create the FamilySize feature
 train$FamilySize <- train$SibSp + train$Parch + 1
 test$FamilySize <- test$SibSp + test$Parch + 1
 
 # Inspect the new feature
-summary(train$FamilySize)
-table(train$FamilySize)
+head(train[, "FamilySize"])
+head(test[, "FamilySize"])
 
 #--debugged up to this point so far-------
 
+describe(train)
+describe(test)
+#--test still has 1 missing fare - impute with the median
+test$Fare[is.na(test$Fare)] <- median(test$Fare, na.rm = TRUE)
+describe(test)
+
 # 5) Remove unnecessary features
 train <- train %>% 
+  select(-Cabin) %>% 
   select(-Name) %>% 
   select(-PassengerId) %>% 
   select(-Ticket)
-head(train)
-describe(train)
 
 test <- test %>% 
   select(-Cabin) %>% 
   select(-Name) %>% 
   select(-PassengerId) %>% 
   select(-Ticket)
-head(test)
-describe(test)
 
-
-# -- all adjustments MUST also be applied to the test dataset
+str(test)
+str(train)
 
 # Data preprocessing is now complete and we are ready to model 
-# the `Survival` variable for the `test` dataset.
+# the `Survival` variable for the `test` dataset!
 
 # Train the random forest model
 rf_cv_control <- trainControl(method = "cv", number = 5)
