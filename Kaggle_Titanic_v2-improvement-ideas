@@ -1,0 +1,15 @@
+Ideas for v3 Improvements - Titanic Competition Dataset
+
+Feature Engineering
+- Was a passenger traveling alone?
+- Titles from names
+    - Mr, Mrs, Miss, Other
+    
+Model Selection:
+
+Random Forest and Gradient Boosting models (e.g., XGBoost, LightGBM) perform well on structured data.
+Experiment with ensemble models or stacking to combine the strengths of multiple algorithms.
+
+5.) Hyperparameter Tuning:
+
+Use GridSearchCV or RandomizedSearchCV to fine-tune parameters like n_estimators, max_depth, and learning rates.
